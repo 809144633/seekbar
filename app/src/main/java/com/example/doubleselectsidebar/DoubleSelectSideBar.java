@@ -26,7 +26,7 @@ public class DoubleSelectSideBar extends View {
     public static final int TOP = 1;
     public static final int RIGHT = 2;
     public static final int BOTTOM = 3;
-    private int indicatorRadius;
+    private float indicatorRadius;
     private DoubleSelectIndicator minIndicator, maxIndicator;
     private int finalWidth, finalHeight;
     private int markedColor, unMarkedColor;
@@ -53,6 +53,7 @@ public class DoubleSelectSideBar extends View {
         bitmapRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
         initAttrs(context, attrs);
         initPaint();
+        setClickable(true);
     }
 
     private void initPaint() {
@@ -80,7 +81,7 @@ public class DoubleSelectSideBar extends View {
         int heightSize = MeasureSpec.getSize(heightMeasureSpec);
         int heightMode = MeasureSpec.getMode(heightMeasureSpec);
         int wrapWidth = DensityUtil.dpToPx(getContext(), 200);
-        int wrapHeight = 2 * (indicatorRadius + DensityUtil.dpToPx(getContext(), 4));
+        int wrapHeight = 2 * (int) (indicatorRadius + DensityUtil.dpToPx(getContext(), 4));
         int verticalPadding = getPaddingStart() + getPaddingEnd();
         int horizontalPadding = getPaddingTop() + getPaddingBottom();
         if (widthMode == MeasureSpec.AT_MOST && heightMode == MeasureSpec.AT_MOST) {
@@ -98,12 +99,12 @@ public class DoubleSelectSideBar extends View {
         }
         startX = getPaddingStart();
         endX = finalWidth - getPaddingEnd();
-        updateIndicatorPosition(minIndicator, startX + minIndicator.getIndicatorRadius(), finalHeight / 2);
-        updateIndicatorPosition(maxIndicator, endX - maxIndicator.getIndicatorRadius(), finalHeight / 2);
+        updateIndicatorPosition(minIndicator, startX + minIndicator.getIndicatorRadius(), finalHeight / 2f);
+        updateIndicatorPosition(maxIndicator, endX - maxIndicator.getIndicatorRadius(), finalHeight / 2f);
         setMeasuredDimension(finalWidth, finalHeight);
     }
 
-    private void updateIndicatorPosition(DoubleSelectIndicator indicator, int x, int y) {
+    private void updateIndicatorPosition(DoubleSelectIndicator indicator, float x, float y) {
         indicator.setIndicatorX(x);
         indicator.setMinIndicatorRange(
                 x - indicator.getIndicatorRadius(),
@@ -168,7 +169,7 @@ public class DoubleSelectSideBar extends View {
     }
 
     private boolean checkIsTouchIndicator(DoubleSelectIndicator indicator, float x, float y) {
-        int[] range = indicator.getIndicatorRange();
+        float[] range = indicator.getIndicatorRange();
         return x >= range[LEFT] && x <= range[RIGHT] && y >= range[TOP] && y <= range[BOTTOM];
     }
 
@@ -185,7 +186,11 @@ public class DoubleSelectSideBar extends View {
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
-
+                if (isMinIndicatorTouched) {
+                    minIndicatorMoveToPosition(minIndicator, event.getX());
+                } else if (isMaxIndicatorTouched) {
+                    maxIndicatorMoveToPosition(maxIndicator, event.getX());
+                }
                 break;
             case MotionEvent.ACTION_UP:
                 isMinIndicatorTouched = false;
@@ -196,27 +201,38 @@ public class DoubleSelectSideBar extends View {
         return super.onTouchEvent(event);
     }
 
+
+    private void maxIndicatorMoveToPosition(DoubleSelectIndicator maxIndicator, float x) {
+        maxIndicator.setIndicatorX(x);
+        invalidate();
+    }
+
+    private void minIndicatorMoveToPosition(DoubleSelectIndicator minIndicator, float x) {
+        minIndicator.setIndicatorX(x);
+        invalidate();
+    }
+
     private static class DoubleSelectIndicator {
 
-        private int indicatorRadius;
-        private int[] indicatorRange = new int[4];
+        private float indicatorRadius;
+        private float[] indicatorRange = new float[4];
         // 当前所在XY轴的位置（中心点）
         private float indicatorX;
         private float indicatorY;
 
-        public int getIndicatorRadius() {
+        public float getIndicatorRadius() {
             return indicatorRadius;
         }
 
-        public void setIndicatorRadius(int indicatorRadius) {
+        public void setIndicatorRadius(float indicatorRadius) {
             this.indicatorRadius = indicatorRadius;
         }
 
-        public int[] getIndicatorRange() {
+        public float[] getIndicatorRange() {
             return indicatorRange;
         }
 
-        public void setMinIndicatorRange(int left, int top, int right, int bottom) {
+        public void setMinIndicatorRange(float left, float top, float right, float bottom) {
             this.indicatorRange[0] = left;
             this.indicatorRange[1] = top;
             this.indicatorRange[2] = right;
@@ -229,6 +245,7 @@ public class DoubleSelectSideBar extends View {
 
         public void setIndicatorX(float indicatorX) {
             this.indicatorX = indicatorX;
+            setMinIndicatorRange(indicatorX - indicatorRadius, indicatorRange[1], indicatorX + indicatorRadius, indicatorRange[3]);
         }
 
         public float getIndicatorY() {
