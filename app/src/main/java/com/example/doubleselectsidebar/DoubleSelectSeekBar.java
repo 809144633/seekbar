@@ -8,9 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -191,15 +189,14 @@ public class DoubleSelectSeekBar extends View {
                 break;
             case MotionEvent.ACTION_MOVE:
                 currentX = event.getX();
-                // MotionEvent.ACTION_DOWN 同时满足触摸两个指示器
+                // MotionEvent.ACTION_DOWN 满足同时触摸两个指示器
                 if (isMinIndicatorTouched && isMaxIndicatorTouched) {
                     isMaxIndicatorTouched = currentX - lastX > 0;
                     isMinIndicatorTouched = currentX - lastX < 0;
                 }
                 if (isMinIndicatorTouched) {
                     minIndicatorMoveToPosition(currentX);
-                }
-                if (isMaxIndicatorTouched) {
+                } else if (isMaxIndicatorTouched) {
                     maxIndicatorMoveToPosition(currentX);
                 }
                 lastX = currentX;
