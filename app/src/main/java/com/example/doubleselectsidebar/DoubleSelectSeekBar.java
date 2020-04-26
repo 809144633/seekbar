@@ -21,7 +21,7 @@ import androidx.core.content.ContextCompat;
  * @date: 2020/4/26 9:02
  * @desc:
  */
-public class DoubleSelectSideBar extends View {
+public class DoubleSelectSeekBar extends View {
     public static final int LEFT = 0;
     public static final int TOP = 1;
     public static final int RIGHT = 2;
@@ -33,24 +33,23 @@ public class DoubleSelectSideBar extends View {
     private int lineWidth;
     private Paint mPaint;
     private int startX, endX;
-    private Drawable indicatorTip;
-    private Bitmap bitmap;
-    private Rect bitmapRect;
+    private Bitmap indicatorBitmap;
+    private Rect indicatorBitmapRect;
 
-    public DoubleSelectSideBar(Context context) {
+    public DoubleSelectSeekBar(Context context) {
         this(context, null);
     }
 
-    public DoubleSelectSideBar(Context context, @Nullable AttributeSet attrs) {
+    public DoubleSelectSeekBar(Context context, @Nullable AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public DoubleSelectSideBar(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+    public DoubleSelectSeekBar(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         minIndicator = new DoubleSelectIndicator();
         maxIndicator = new DoubleSelectIndicator();
-        bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.indicator_icon);
-        bitmapRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+        indicatorBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.indicator_icon);
+        indicatorBitmapRect = new Rect(0, 0, indicatorBitmap.getWidth(), indicatorBitmap.getHeight());
         initAttrs(context, attrs);
         initPaint();
         setClickable(true);
@@ -62,13 +61,13 @@ public class DoubleSelectSideBar extends View {
 
     private void initAttrs(Context context, AttributeSet attrs) {
         if (attrs != null) {
-            TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.DoubleSelectSideBar);
-            indicatorRadius = (int) typedArray.getDimension(R.styleable.DoubleSelectSideBar_indicator_width, DensityUtil.dpToPx(context, 20)) / 2;
+            TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.DoubleSelectSeekBar);
+            indicatorRadius = (int) typedArray.getDimension(R.styleable.DoubleSelectSeekBar_indicator_width, DensityUtil.dpToPx(context, 20)) / 2;
             minIndicator.setIndicatorRadius(indicatorRadius);
             maxIndicator.setIndicatorRadius(indicatorRadius);
-            markedColor = typedArray.getColor(R.styleable.DoubleSelectSideBar_marked_color, ContextCompat.getColor(context, R.color.marked_color));
-            unMarkedColor = typedArray.getColor(R.styleable.DoubleSelectSideBar_unmarked_color, ContextCompat.getColor(context, R.color.unmarked_color));
-            lineWidth = (int) typedArray.getDimension(R.styleable.DoubleSelectSideBar_line_width, DensityUtil.dpToPx(context, 2));
+            markedColor = typedArray.getColor(R.styleable.DoubleSelectSeekBar_marked_color, ContextCompat.getColor(context, R.color.marked_color));
+            unMarkedColor = typedArray.getColor(R.styleable.DoubleSelectSeekBar_unmarked_color, ContextCompat.getColor(context, R.color.unmarked_color));
+            lineWidth = (int) typedArray.getDimension(R.styleable.DoubleSelectSeekBar_line_width, DensityUtil.dpToPx(context, 2));
             typedArray.recycle();
         }
     }
@@ -106,13 +105,9 @@ public class DoubleSelectSideBar extends View {
 
     private void updateIndicatorPosition(DoubleSelectIndicator indicator, float x, float y) {
         indicator.setIndicatorX(x);
-        indicator.setMinIndicatorRange(
-                x - indicator.getIndicatorRadius(),
-                y - indicator.getIndicatorRadius(),
-                x + indicator.getIndicatorRadius(),
-                y + indicator.getIndicatorRadius());
         indicator.setIndicatorY(y);
     }
+
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -135,8 +130,8 @@ public class DoubleSelectSideBar extends View {
                 maxIndicator.getIndicatorRange()[RIGHT],
                 maxIndicator.getIndicatorRange()[BOTTOM]);
 
-        canvas.drawBitmap(bitmap, bitmapRect, minRect, mPaint);
-        canvas.drawBitmap(bitmap, bitmapRect, maxRect, mPaint);
+        canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, minRect, mPaint);
+        canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, maxRect, mPaint);
     }
 
     private void drawUnMarkedLined(Canvas canvas) {
@@ -173,24 +168,39 @@ public class DoubleSelectSideBar extends View {
         return x >= range[LEFT] && x <= range[RIGHT] && y >= range[TOP] && y <= range[BOTTOM];
     }
 
-    private boolean isMinIndicatorTouched, isMaxIndicatorTouched;
+    private boolean isMinIndicatorTouched;
+    private boolean isMaxIndicatorTouched;
+    private boolean lastTouchMinIndicator;
+    private float lastX;
+    private float currentX;
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                lastX = currentX = event.getX();
                 if (checkIsTouchIndicator(minIndicator, event.getX(), event.getY())) {
                     isMinIndicatorTouched = true;
-                } else if (checkIsTouchIndicator(maxIndicator, event.getX(), event.getY())) {
+                }
+                if (checkIsTouchIndicator(maxIndicator, event.getX(), event.getY())) {
                     isMaxIndicatorTouched = true;
                 }
+
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (isMinIndicatorTouched) {
-                    minIndicatorMoveToPosition(minIndicator, event.getX());
-                } else if (isMaxIndicatorTouched) {
-                    maxIndicatorMoveToPosition(maxIndicator, event.getX());
+                currentX = event.getX();
+                // MotionEvent.ACTION_DOWN 同时满足触摸两个指示器
+                if (isMinIndicatorTouched && isMaxIndicatorTouched) {
+                    isMaxIndicatorTouched = currentX - lastX > 0;
+                    isMinIndicatorTouched = currentX - lastX < 0;
                 }
+                if (isMinIndicatorTouched) {
+                    minIndicatorMoveToPosition(event.getX());
+                }
+                if (isMaxIndicatorTouched) {
+                    maxIndicatorMoveToPosition(event.getX());
+                }
+                lastX = currentX;
                 break;
             case MotionEvent.ACTION_UP:
                 isMinIndicatorTouched = false;
@@ -202,14 +212,34 @@ public class DoubleSelectSideBar extends View {
     }
 
 
-    private void maxIndicatorMoveToPosition(DoubleSelectIndicator maxIndicator, float x) {
-        maxIndicator.setIndicatorX(x);
+    private void maxIndicatorMoveToPosition(float x) {
+        if (x + maxIndicator.indicatorRadius > endX) {
+            maxIndicator.setIndicatorX(endX - maxIndicator.indicatorRadius);
+        } else if (x - maxIndicator.indicatorRadius < minIndicator.indicatorRange[LEFT]) {
+            maxIndicator.setIndicatorX(minIndicator.indicatorRange[LEFT] + maxIndicator.indicatorRadius);
+        } else {
+            maxIndicator.setIndicatorX(x);
+        }
         invalidate();
     }
 
-    private void minIndicatorMoveToPosition(DoubleSelectIndicator minIndicator, float x) {
-        minIndicator.setIndicatorX(x);
+    private void minIndicatorMoveToPosition(float x) {
+        if (x - minIndicator.indicatorRadius < startX) {
+            minIndicator.setIndicatorX(startX + minIndicator.indicatorRadius);
+        } else if (x + minIndicator.indicatorRadius > maxIndicator.indicatorRange[RIGHT]) {
+            minIndicator.setIndicatorX(maxIndicator.indicatorRange[RIGHT] - minIndicator.indicatorRadius);
+        } else {
+            minIndicator.setIndicatorX(x);
+        }
         invalidate();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (!indicatorBitmap.isRecycled()) {
+            indicatorBitmap.recycle();
+        }
     }
 
     private static class DoubleSelectIndicator {
@@ -245,7 +275,11 @@ public class DoubleSelectSideBar extends View {
 
         public void setIndicatorX(float indicatorX) {
             this.indicatorX = indicatorX;
-            setMinIndicatorRange(indicatorX - indicatorRadius, indicatorRange[1], indicatorX + indicatorRadius, indicatorRange[3]);
+            setMinIndicatorRange(
+                    indicatorX - indicatorRadius,
+                    indicatorRange[1],
+                    indicatorX + indicatorRadius,
+                    indicatorRange[3]);
         }
 
         public float getIndicatorY() {
@@ -254,6 +288,11 @@ public class DoubleSelectSideBar extends View {
 
         public void setIndicatorY(float indicatorY) {
             this.indicatorY = indicatorY;
+            setMinIndicatorRange(
+                    indicatorRange[0],
+                    indicatorY - indicatorRadius,
+                    indicatorRange[2],
+                    indicatorY + indicatorRadius);
         }
     }
 
