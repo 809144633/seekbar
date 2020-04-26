@@ -10,6 +10,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -22,19 +23,20 @@ import androidx.core.content.ContextCompat;
  * @desc:
  */
 public class DoubleSelectSeekBar extends View {
+    private static final String TAG = "DoubleSelectSeekBar";
     public static final int LEFT = 0;
     public static final int TOP = 1;
     public static final int RIGHT = 2;
     public static final int BOTTOM = 3;
     private float indicatorRadius;
     private DoubleSelectIndicator minIndicator, maxIndicator;
-    private int finalWidth, finalHeight;
     private int markedColor, unMarkedColor;
     private int lineWidth;
     private Paint mPaint;
     private int startX, endX;
     private Bitmap indicatorBitmap;
     private Rect indicatorBitmapRect;
+
 
     public DoubleSelectSeekBar(Context context) {
         this(context, null);
@@ -80,9 +82,11 @@ public class DoubleSelectSeekBar extends View {
         int heightSize = MeasureSpec.getSize(heightMeasureSpec);
         int heightMode = MeasureSpec.getMode(heightMeasureSpec);
         int wrapWidth = DensityUtil.dpToPx(getContext(), 200);
-        int wrapHeight = 2 * (int) (indicatorRadius + DensityUtil.dpToPx(getContext(), 4));
+        int wrapHeight = 2 * (int) (indicatorRadius + DensityUtil.dpToPx(getContext(), 2));
         int verticalPadding = getPaddingStart() + getPaddingEnd();
         int horizontalPadding = getPaddingTop() + getPaddingBottom();
+        int finalWidth;
+        int finalHeight;
         if (widthMode == MeasureSpec.AT_MOST && heightMode == MeasureSpec.AT_MOST) {
             finalWidth = wrapWidth + horizontalPadding;
             finalHeight = wrapHeight + verticalPadding;
@@ -170,7 +174,6 @@ public class DoubleSelectSeekBar extends View {
 
     private boolean isMinIndicatorTouched;
     private boolean isMaxIndicatorTouched;
-    private boolean lastTouchMinIndicator;
     private float lastX;
     private float currentX;
 
@@ -185,7 +188,6 @@ public class DoubleSelectSeekBar extends View {
                 if (checkIsTouchIndicator(maxIndicator, event.getX(), event.getY())) {
                     isMaxIndicatorTouched = true;
                 }
-
                 break;
             case MotionEvent.ACTION_MOVE:
                 currentX = event.getX();
@@ -195,10 +197,10 @@ public class DoubleSelectSeekBar extends View {
                     isMinIndicatorTouched = currentX - lastX < 0;
                 }
                 if (isMinIndicatorTouched) {
-                    minIndicatorMoveToPosition(event.getX());
+                    minIndicatorMoveToPosition(currentX);
                 }
                 if (isMaxIndicatorTouched) {
-                    maxIndicatorMoveToPosition(event.getX());
+                    maxIndicatorMoveToPosition(currentX);
                 }
                 lastX = currentX;
                 break;
@@ -249,6 +251,9 @@ public class DoubleSelectSeekBar extends View {
         // 当前所在XY轴的位置（中心点）
         private float indicatorX;
         private float indicatorY;
+        private int num;
+        // 数值精度
+        private int numDegree;
 
         public float getIndicatorRadius() {
             return indicatorRadius;
@@ -293,6 +298,24 @@ public class DoubleSelectSeekBar extends View {
                     indicatorY - indicatorRadius,
                     indicatorRange[2],
                     indicatorY + indicatorRadius);
+        }
+
+        public int getNum() {
+            return num;
+        }
+
+        public void setNum(int num) {
+            if (num % numDegree == 0) {
+                this.num = num;
+            }
+        }
+
+        public int getNumDegree() {
+            return numDegree;
+        }
+
+        public void setNumDegree(int numDegree) {
+            this.numDegree = numDegree;
         }
     }
 
