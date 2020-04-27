@@ -9,6 +9,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -26,6 +27,8 @@ public class DoubleSelectSeekBar extends View {
     public static final int TOP = 1;
     public static final int RIGHT = 2;
     public static final int BOTTOM = 3;
+    private float startLineX;
+    private float endLineX;
     private float indicatorRadius;
     private DoubleSelectIndicator minIndicator, maxIndicator;
     private int markedColor, unMarkedColor;
@@ -34,7 +37,26 @@ public class DoubleSelectSeekBar extends View {
     private int startX, endX;
     private Bitmap indicatorBitmap;
     private Rect indicatorBitmapRect;
-
+    private Bitmap tipBitmap;
+    private Rect tipBitmapRect;
+    private float minValue;
+    private float maxValue;
+    private TextBean minValueText;
+    private TextBean maxValueText;
+    // 文字与指示器之间的间隔
+    private int TextVerticalSpace;
+    private int indicatorTipHeight;
+    private int indicatorTipWidth;
+    private int indicatorTipVerticalSpace;
+    private TextBean minIndicatorValueText;
+    private TextBean maxIndicatorValueText;
+    private int baseLineBottom;
+    // 最大值不限的情况
+    private float unlimitedArea;
+    // 最大最小值差
+    private float valueStep;
+    // 数值精度
+    private int numDegree = 1;
 
     public DoubleSelectSeekBar(Context context) {
         this(context, null);
@@ -46,23 +68,35 @@ public class DoubleSelectSeekBar extends View {
 
     public DoubleSelectSeekBar(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        minIndicator = new DoubleSelectIndicator();
-        maxIndicator = new DoubleSelectIndicator();
-        indicatorBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.indicator_icon);
-        indicatorBitmapRect = new Rect(0, 0, indicatorBitmap.getWidth(), indicatorBitmap.getHeight());
+        init(context);
         initAttrs(context, attrs);
-        initPaint();
         setClickable(true);
     }
 
-    private void initPaint() {
+    private void init(Context context) {
+        minIndicator = new DoubleSelectIndicator();
+        maxIndicator = new DoubleSelectIndicator();
+        indicatorBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.eh_ic_indicator);
+        indicatorBitmapRect = new Rect(0, 0, indicatorBitmap.getWidth(), indicatorBitmap.getHeight());
+        tipBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.aaa);
+        tipBitmapRect = new Rect(0, 0, tipBitmap.getWidth(), tipBitmap.getHeight());
         mPaint = new Paint();
+        minValueText = new TextBean();
+        maxValueText = new TextBean();
+        minIndicatorValueText = new TextBean();
+        maxIndicatorValueText = new TextBean();
+        indicatorTipVerticalSpace = TextVerticalSpace = DensityUtil.dpToPx(getContext(), 6);
+        indicatorTipHeight = DensityUtil.dpToPx(getContext(), 30);
+        //设置基准线的高度
+        mPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mPaint.setTextSize(DensityUtil.dpToPx(getContext(), 12));
+        baseLineBottom = (int) mPaint.getFontMetrics().bottom;
     }
 
     private void initAttrs(Context context, AttributeSet attrs) {
         if (attrs != null) {
             TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.DoubleSelectSeekBar);
-            indicatorRadius = (int) typedArray.getDimension(R.styleable.DoubleSelectSeekBar_indicator_width, DensityUtil.dpToPx(context, 20)) / 2;
+            indicatorRadius = (int) (typedArray.getDimension(R.styleable.DoubleSelectSeekBar_indicator_width, DensityUtil.dpToPx(context, 20)) / 2);
             minIndicator.setIndicatorRadius(indicatorRadius);
             maxIndicator.setIndicatorRadius(indicatorRadius);
             markedColor = typedArray.getColor(R.styleable.DoubleSelectSeekBar_marked_color, ContextCompat.getColor(context, R.color.marked_color));
@@ -81,16 +115,17 @@ public class DoubleSelectSeekBar extends View {
         int heightMode = MeasureSpec.getMode(heightMeasureSpec);
         int wrapWidth = DensityUtil.dpToPx(getContext(), 200);
         int wrapHeight = 2 * (int) (indicatorRadius + DensityUtil.dpToPx(getContext(), 2));
-        int verticalPadding = getPaddingStart() + getPaddingEnd();
-        int horizontalPadding = getPaddingTop() + getPaddingBottom();
+        int verticalPadding = getPaddingTop() + getPaddingBottom();
+        int horizontalPadding = getPaddingStart() + getPaddingEnd();
+        int textValueHeight = Math.max(minValueText.getRect().height(), maxValueText.getRect().height());
         int finalWidth;
         int finalHeight;
         if (widthMode == MeasureSpec.AT_MOST && heightMode == MeasureSpec.AT_MOST) {
             finalWidth = wrapWidth + horizontalPadding;
-            finalHeight = wrapHeight + verticalPadding;
+            finalHeight = wrapHeight + verticalPadding + textValueHeight + TextVerticalSpace + indicatorTipVerticalSpace + baseLineBottom + indicatorTipHeight;
         } else if (widthMode == MeasureSpec.EXACTLY) {
             finalWidth = widthSize - horizontalPadding;
-            finalHeight = wrapHeight + verticalPadding;
+            finalHeight = wrapHeight + verticalPadding + textValueHeight + TextVerticalSpace + indicatorTipVerticalSpace + baseLineBottom + indicatorTipHeight;
         } else if (heightMode == MeasureSpec.EXACTLY) {
             finalWidth = wrapWidth + horizontalPadding;
             finalHeight = heightSize - verticalPadding;
@@ -100,16 +135,31 @@ public class DoubleSelectSeekBar extends View {
         }
         startX = getPaddingStart();
         endX = finalWidth - getPaddingEnd();
-        updateIndicatorPosition(minIndicator, startX + minIndicator.getIndicatorRadius(), finalHeight / 2f);
-        updateIndicatorPosition(maxIndicator, endX - maxIndicator.getIndicatorRadius(), finalHeight / 2f);
+        startLineX = startX + minIndicator.getIndicatorRadius();
+        endLineX = endX - maxIndicator.getIndicatorRadius();
+        //确定不限的区域为末尾留出的10px的区域
+        unlimitedArea = 10f;
+        //确定指示器位置信息
+        updateIndicatorPosition(minIndicator, startLineX, getPaddingTop() + minIndicator.getIndicatorRadius() + indicatorTipVerticalSpace + indicatorTipHeight);
+        updateIndicatorPosition(maxIndicator, endLineX, getPaddingTop() + minIndicator.getIndicatorRadius() + indicatorTipVerticalSpace + indicatorTipHeight);
         setMeasuredDimension(finalWidth, finalHeight);
     }
 
     private void updateIndicatorPosition(DoubleSelectIndicator indicator, float x, float y) {
         indicator.setIndicatorX(x);
         indicator.setIndicatorY(y);
+        updateNum(indicator, x);
     }
 
+    private void updateNum(DoubleSelectIndicator indicator, float x) {
+        x += 0.5f;
+        if (x > endLineX - unlimitedArea) {
+            indicator.setNum(maxValue + "+");
+        } else {
+            int currentNum = (int) ((x - startLineX) * (maxValue - minValue) / (endLineX - startLineX - unlimitedArea));
+            indicator.setNum(currentNum);
+        }
+    }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -117,36 +167,116 @@ public class DoubleSelectSeekBar extends View {
         drawUnMarkedLined(canvas);
         drawMarkedLined(canvas);
         drawIndicator(canvas);
+        drawTextMaxMinValue(canvas);
+        drawIndicatorTips(canvas);
+    }
+
+    private void drawIndicatorTips(Canvas canvas) {
+        // 绘制最小指示器文字提示
+        drawIndicatorTip(minIndicator, canvas);
+        // 绘制最大指示器文字提示
+        drawIndicatorTip(maxIndicator, canvas);
+    }
+
+    private float tipSpace = DensityUtil.dpToPx(getContext(), 5);
+
+    private String tipContent;
+    private Rect tipRect;
+
+    private void drawIndicatorTip(DoubleSelectIndicator indicator, Canvas canvas) {
+        mPaint.reset();
+        mPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mPaint.setTextSize(DensityUtil.dpToPx(getContext(), 12));
+        mPaint.setStyle(Paint.Style.FILL);
+        mPaint.setDither(true);
+        if (indicator == minIndicator) {
+            tipContent = minIndicator.getNum();
+            mPaint.getTextBounds(tipContent, 0, tipContent.length(), minIndicatorValueText.getRect());
+            indicatorTipWidth = minIndicatorValueText.getRect().width() + 2 * (DensityUtil.dpToPx(getContext(), 9));
+            tipRect = new Rect(
+                    (int) minIndicator.getIndicatorX() - indicatorTipWidth / 2,
+                    (int) minIndicator.getIndicatorRange()[TOP] - (indicatorTipHeight + indicatorTipVerticalSpace),
+                    (int) minIndicator.getIndicatorX() + indicatorTipWidth / 2,
+                    (int) minIndicator.getIndicatorRange()[TOP] - indicatorTipVerticalSpace);
+        } else {
+            tipContent = maxIndicator.getNum();
+            mPaint.getTextBounds(tipContent, 0, tipContent.length(), maxIndicatorValueText.getRect());
+            indicatorTipWidth = maxIndicatorValueText.getRect().width() + 2 * (DensityUtil.dpToPx(getContext(), 12));
+            tipRect = new Rect(
+                    (int) maxIndicator.getIndicatorX() - indicatorTipWidth / 2,
+                    (int) maxIndicator.getIndicatorRange()[TOP] - (indicatorTipHeight + indicatorTipVerticalSpace),
+                    (int) maxIndicator.getIndicatorX() + indicatorTipWidth / 2,
+                    (int) maxIndicator.getIndicatorRange()[TOP] - indicatorTipVerticalSpace);
+        }
+        canvas.drawBitmap(tipBitmap, tipBitmapRect, tipRect, mPaint);
+        drawTipText(indicator, canvas, tipContent, tipRect);
+    }
+
+    private float tipX;
+    private float tipY;
+
+    private void drawTipText(DoubleSelectIndicator indicator, Canvas canvas, String content, Rect rect) {
+        mPaint.reset();
+        mPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mPaint.setColor(ContextCompat.getColor(getContext(), R.color.white));
+        mPaint.setTextSize(DensityUtil.dpToPx(getContext(), 12));
+        tipY = rect.top - mPaint.getFontMetrics().ascent + tipSpace;
+        if (indicator == minIndicator) {
+            tipX = minIndicator.indicatorX - minIndicatorValueText.getRect().width() / 2f;
+        } else {
+            tipX = maxIndicator.indicatorX - maxIndicatorValueText.getRect().width() / 2f;
+        }
+        canvas.drawText(content, tipX, tipY, mPaint);
+    }
+
+    private void drawTextMaxMinValue(Canvas canvas) {
+        mPaint.reset();
+        mPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mPaint.setColor(ContextCompat.getColor(getContext(), R.color.textColorGray));
+        mPaint.setTextSize(DensityUtil.dpToPx(getContext(), 12));
+        mPaint.setTextAlign(Paint.Align.CENTER);
+        // 绘制最小值刻度文字
+        canvas.drawText(
+                minValueText.getText(),
+                startLineX - minValueText.getRect().width() / 2f,
+                minIndicator.getIndicatorRange()[BOTTOM] + minValueText.getRect().height() + baseLineBottom + TextVerticalSpace,
+                mPaint);
+        // 绘制最大值刻度文字
+        canvas.drawText(
+                maxValueText.getText(),
+                endLineX - maxValueText.getRect().width() / 2f,
+                maxIndicator.getIndicatorRange()[BOTTOM] + minValueText.getRect().height() + baseLineBottom + TextVerticalSpace,
+                mPaint);
     }
 
     private void drawIndicator(Canvas canvas) {
         mPaint.reset();
+        mPaint.setAntiAlias(true);
+        mPaint.setFilterBitmap(true);
         RectF minRect = new RectF(
                 minIndicator.getIndicatorRange()[LEFT],
-                minIndicator.getIndicatorRange()[TOP],
+                minIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 3),
                 minIndicator.getIndicatorRange()[RIGHT],
-                minIndicator.getIndicatorRange()[BOTTOM]);
+                minIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 3));
         RectF maxRect = new RectF(
                 maxIndicator.getIndicatorRange()[LEFT],
-                maxIndicator.getIndicatorRange()[TOP],
+                maxIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 3),
                 maxIndicator.getIndicatorRange()[RIGHT],
-                maxIndicator.getIndicatorRange()[BOTTOM]);
-
+                maxIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 3));
         canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, minRect, mPaint);
         canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, maxRect, mPaint);
     }
 
     private void drawUnMarkedLined(Canvas canvas) {
-
         mPaint.reset();
         mPaint.setColor(unMarkedColor);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(lineWidth);
         // 绘制起点到终点
         canvas.drawLine(
-                startX,
+                startLineX,
                 minIndicator.getIndicatorY(),
-                endX,
+                endLineX,
                 maxIndicator.getIndicatorY(),
                 mPaint);
     }
@@ -158,9 +288,9 @@ public class DoubleSelectSeekBar extends View {
         mPaint.setStrokeWidth(lineWidth);
         // 绘制指示器之间
         canvas.drawLine(
-                minIndicator.getIndicatorRange()[RIGHT],
+                minIndicator.getIndicatorX(),
                 minIndicator.getIndicatorY(),
-                maxIndicator.getIndicatorRange()[LEFT],
+                maxIndicator.getIndicatorX(),
                 maxIndicator.getIndicatorY(),
                 mPaint);
     }
@@ -174,6 +304,7 @@ public class DoubleSelectSeekBar extends View {
     private boolean isMaxIndicatorTouched;
     private float lastX;
     private float currentX;
+    private int currentValue;
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -189,6 +320,9 @@ public class DoubleSelectSeekBar extends View {
                 break;
             case MotionEvent.ACTION_MOVE:
                 currentX = event.getX();
+                if (lastX == event.getX()) {
+                    return super.onTouchEvent(event);
+                }
                 // MotionEvent.ACTION_DOWN 满足同时触摸两个指示器
                 if (isMinIndicatorTouched && isMaxIndicatorTouched) {
                     isMaxIndicatorTouched = currentX - lastX > 0;
@@ -204,33 +338,80 @@ public class DoubleSelectSeekBar extends View {
             case MotionEvent.ACTION_UP:
                 isMinIndicatorTouched = false;
                 isMaxIndicatorTouched = false;
+                if (minIndicator.getNum().endsWith("+") && maxIndicator.getNum().endsWith("+")) {
+                    setPosition(maxValue * 2, maxValue * 2);
+                } else if (maxIndicator.getNum().endsWith("+")) {
+                    setPosition(Float.parseFloat(minIndicator.getNum()), maxValue * 2);
+                } else {
+                    setPosition(Float.parseFloat(minIndicator.getNum()), Float.parseFloat(maxIndicator.getNum()));
+                }
                 break;
             default:
         }
         return super.onTouchEvent(event);
     }
 
-
     private void maxIndicatorMoveToPosition(float x) {
-        if (x + maxIndicator.indicatorRadius > endX) {
-            maxIndicator.setIndicatorX(endX - maxIndicator.indicatorRadius);
-        } else if (x - maxIndicator.indicatorRadius < minIndicator.indicatorRange[LEFT]) {
-            maxIndicator.setIndicatorX(minIndicator.indicatorRange[LEFT] + maxIndicator.indicatorRadius);
-        } else {
-            maxIndicator.setIndicatorX(x);
-        }
+        maxIndicator.setIndicatorX(Math.max(minIndicator.indicatorX, Math.min(x, endLineX)));
+        updateNum(maxIndicator, maxIndicator.getIndicatorX());
         invalidate();
     }
 
     private void minIndicatorMoveToPosition(float x) {
-        if (x - minIndicator.indicatorRadius < startX) {
-            minIndicator.setIndicatorX(startX + minIndicator.indicatorRadius);
-        } else if (x + minIndicator.indicatorRadius > maxIndicator.indicatorRange[RIGHT]) {
-            minIndicator.setIndicatorX(maxIndicator.indicatorRange[RIGHT] - minIndicator.indicatorRadius);
-        } else {
-            minIndicator.setIndicatorX(x);
-        }
+        minIndicator.setIndicatorX(Math.max(startLineX, Math.min(x, maxIndicator.indicatorX)));
+        updateNum(minIndicator, minIndicator.getIndicatorX());
         invalidate();
+    }
+
+
+    public void setPosition(float value1, float value2) {
+        if (maxValue == 0) {
+            maxValue = Math.max(value1, value2);
+        }
+        float x1 = value1 / valueStep * (endLineX - startLineX - unlimitedArea);
+        float x2 = value2 / valueStep * (endLineX - startLineX - unlimitedArea);
+        x1 = Math.max(startLineX, Math.min(x1, endLineX));
+        x2 = Math.max(startLineX, Math.min(x2, endLineX));
+        float minX = value1 < value2 ? x1 : x2;
+        float maxX = value1 < value2 ? x2 : x1;
+        minIndicator.setIndicatorX(minX);
+        maxIndicator.setIndicatorX(maxX);
+        updateNum(minIndicator, minX + startLineX);
+        updateNum(maxIndicator, maxX + startLineX);
+        invalidate();
+    }
+
+    public float getMinValue() {
+        return minValue;
+    }
+
+    public void setMinValue(float minValue) {
+        minValueText.setText(String.valueOf(minValue));
+        mPaint.getTextBounds(minValueText.getText(), 0, minValueText.getText().length(), minValueText.getRect());
+        this.minValue = minValue;
+        valueStep = maxValue - minValue;
+    }
+
+    public float getMaxValue() {
+        return maxValue;
+    }
+
+    public void setMaxValue(float maxValue) {
+        maxValueText.setText(maxValue + "+");
+        mPaint.getTextBounds(maxValueText.getText(), 0, maxValueText.getText().length(), maxValueText.getRect());
+        this.maxValue = maxValue;
+        valueStep = maxValue - minValue;
+    }
+
+    public void setDegree(int degree) {
+        if (degree <= 0) {
+            degree = 1;
+        }
+        this.numDegree = degree;
+    }
+
+    public int getNumDegree() {
+        return numDegree;
     }
 
     @Override
@@ -239,18 +420,19 @@ public class DoubleSelectSeekBar extends View {
         if (!indicatorBitmap.isRecycled()) {
             indicatorBitmap.recycle();
         }
+        if (!tipBitmap.isRecycled()) {
+            tipBitmap.recycle();
+        }
     }
 
-    private static class DoubleSelectIndicator {
+    private class DoubleSelectIndicator {
 
         private float indicatorRadius;
         private float[] indicatorRange = new float[4];
         // 当前所在XY轴的位置（中心点）
         private float indicatorX;
         private float indicatorY;
-        private int num;
-        // 数值精度
-        private int numDegree;
+        private String num;
 
         public float getIndicatorRadius() {
             return indicatorRadius;
@@ -277,11 +459,8 @@ public class DoubleSelectSeekBar extends View {
 
         public void setIndicatorX(float indicatorX) {
             this.indicatorX = indicatorX;
-            setMinIndicatorRange(
-                    indicatorX - indicatorRadius,
-                    indicatorRange[1],
-                    indicatorX + indicatorRadius,
-                    indicatorRange[3]);
+            indicatorRange[0] = indicatorX - indicatorRadius;
+            indicatorRange[2] = indicatorX + indicatorRadius;
         }
 
         public float getIndicatorY() {
@@ -290,30 +469,46 @@ public class DoubleSelectSeekBar extends View {
 
         public void setIndicatorY(float indicatorY) {
             this.indicatorY = indicatorY;
-            setMinIndicatorRange(
-                    indicatorRange[0],
-                    indicatorY - indicatorRadius,
-                    indicatorRange[2],
-                    indicatorY + indicatorRadius);
+            indicatorRange[1] = indicatorY - indicatorRadius;
+            indicatorRange[3] = indicatorY + indicatorRadius;
         }
 
-        public int getNum() {
+        public String getNum() {
             return num;
         }
 
         public void setNum(int num) {
             if (num % numDegree == 0) {
-                this.num = num;
+                this.num = String.valueOf(num);
+            } else {
+                this.num = String.valueOf(num / numDegree * numDegree);
             }
         }
 
-        public int getNumDegree() {
-            return numDegree;
-        }
-
-        public void setNumDegree(int numDegree) {
-            this.numDegree = numDegree;
+        public void setNum(String num) {
+            this.num = num;
         }
     }
 
+
+    private static class TextBean {
+        private Rect rect = new Rect();
+        private String text;
+
+        public Rect getRect() {
+            return rect;
+        }
+
+        public void setRect(Rect rect) {
+            this.rect = rect;
+        }
+
+        public String getText() {
+            return text;
+        }
+
+        public void setText(String text) {
+            this.text = text;
+        }
+    }
 }

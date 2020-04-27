@@ -7,11 +7,18 @@
     tools:context=".MainActivity">
 
     <com.example.doubleselectsidebar.DoubleSelectSeekBar
+        android:id="@+id/seek_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:paddingTop="50dp"
         android:layout_centerInParent="true"
-        android:layout_margin="20dp"
         app:indicator_width="30dp"
+        android:background="@color/colorPrimary"
         app:line_width="2dp"/>
 
+    <Button
+        android:id="@+id/btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/seek_bar"/>
 </RelativeLayout>

@@ -5,4 +5,8 @@
     <color name="colorAccent">#03DAC5</color>
     <color name="marked_color">#FF7E00</color>
     <color name="unmarked_color">#DDDDDD</color>
+    <color name="textColorGray">#666666</color>
+    <color name="white">#FFFFFF</color>
+    <color name="orange_start">#FF9300</color>
+    <color name="orange_end">#FF7600</color>
 </resources>
