@@ -9,7 +9,6 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -78,7 +77,7 @@ public class DoubleSelectSeekBar extends View {
         maxIndicator = new DoubleSelectIndicator();
         indicatorBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.eh_ic_indicator);
         indicatorBitmapRect = new Rect(0, 0, indicatorBitmap.getWidth(), indicatorBitmap.getHeight());
-        tipBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.aaa);
+        tipBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.eh_ic_indicator_tip);
         tipBitmapRect = new Rect(0, 0, tipBitmap.getWidth(), tipBitmap.getHeight());
         mPaint = new Paint();
         minValueText = new TextBean();
@@ -152,10 +151,10 @@ public class DoubleSelectSeekBar extends View {
     }
 
     private void updateNum(DoubleSelectIndicator indicator, float x) {
-        x += 0.5f;
         if (x > endLineX - unlimitedArea) {
             indicator.setNum(maxValue + "+");
         } else {
+            x += 0.5f;
             int currentNum = (int) ((x - startLineX) * (maxValue - minValue) / (endLineX - startLineX - unlimitedArea));
             indicator.setNum(currentNum);
         }
@@ -164,10 +163,15 @@ public class DoubleSelectSeekBar extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        // 绘制未选中线
         drawUnMarkedLined(canvas);
+        // 绘制选中线
         drawMarkedLined(canvas);
+        // 绘制指示器
         drawIndicator(canvas);
+        // 绘制最大最小刻度
         drawTextMaxMinValue(canvas);
+        // 绘制指示器文字提示
         drawIndicatorTips(canvas);
     }
 
@@ -238,7 +242,7 @@ public class DoubleSelectSeekBar extends View {
         // 绘制最小值刻度文字
         canvas.drawText(
                 minValueText.getText(),
-                startLineX - minValueText.getRect().width() / 2f,
+                startLineX,
                 minIndicator.getIndicatorRange()[BOTTOM] + minValueText.getRect().height() + baseLineBottom + TextVerticalSpace,
                 mPaint);
         // 绘制最大值刻度文字
@@ -255,14 +259,14 @@ public class DoubleSelectSeekBar extends View {
         mPaint.setFilterBitmap(true);
         RectF minRect = new RectF(
                 minIndicator.getIndicatorRange()[LEFT],
-                minIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 3),
+                minIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 2.5f),
                 minIndicator.getIndicatorRange()[RIGHT],
-                minIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 3));
+                minIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 2.5f));
         RectF maxRect = new RectF(
                 maxIndicator.getIndicatorRange()[LEFT],
-                maxIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 3),
+                maxIndicator.getIndicatorRange()[TOP] - DensityUtil.dpToPx(getContext(), 2.5f),
                 maxIndicator.getIndicatorRange()[RIGHT],
-                maxIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 3));
+                maxIndicator.getIndicatorRange()[BOTTOM] + DensityUtil.dpToPx(getContext(), 2.5f));
         canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, minRect, mPaint);
         canvas.drawBitmap(indicatorBitmap, indicatorBitmapRect, maxRect, mPaint);
     }
@@ -366,18 +370,21 @@ public class DoubleSelectSeekBar extends View {
 
     public void setPosition(float value1, float value2) {
         if (maxValue == 0) {
-            maxValue = Math.max(value1, value2);
+            throw new IllegalArgumentException("请设置最大范围");
         }
-        float x1 = value1 / valueStep * (endLineX - startLineX - unlimitedArea);
-        float x2 = value2 / valueStep * (endLineX - startLineX - unlimitedArea);
+        //当设置的值超过最大值则直接将其设置为最大值的平方，确保定位到endLineX
+        value1 = value1 > maxValue ? maxValue * maxValue : value1;
+        value2 = value2 > maxValue ? maxValue * maxValue : value2;
+        float x1 = value1 / valueStep * (endLineX - startLineX - unlimitedArea) + startLineX;
+        float x2 = value2 / valueStep * (endLineX - startLineX - unlimitedArea) + startLineX;
         x1 = Math.max(startLineX, Math.min(x1, endLineX));
         x2 = Math.max(startLineX, Math.min(x2, endLineX));
         float minX = value1 < value2 ? x1 : x2;
         float maxX = value1 < value2 ? x2 : x1;
         minIndicator.setIndicatorX(minX);
         maxIndicator.setIndicatorX(maxX);
-        updateNum(minIndicator, minX + startLineX);
-        updateNum(maxIndicator, maxX + startLineX);
+        updateNum(minIndicator, minX);
+        updateNum(maxIndicator, maxX);
         invalidate();
     }
 
@@ -386,7 +393,7 @@ public class DoubleSelectSeekBar extends View {
     }
 
     public void setMinValue(float minValue) {
-        minValueText.setText(String.valueOf(minValue));
+        minValueText.setText(String.valueOf((int) minValue));
         mPaint.getTextBounds(minValueText.getText(), 0, minValueText.getText().length(), minValueText.getRect());
         this.minValue = minValue;
         valueStep = maxValue - minValue;
