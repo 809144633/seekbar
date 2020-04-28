@@ -56,6 +56,8 @@ public class DoubleSelectSeekBar extends View {
     private float valueStep;
     // 数值精度
     private int numDegree = 1;
+    // 取舍值（四舍五入）
+    private int numStep = 0;
 
     public DoubleSelectSeekBar(Context context) {
         this(context, null);
@@ -147,18 +149,8 @@ public class DoubleSelectSeekBar extends View {
     private void updateIndicatorPosition(DoubleSelectIndicator indicator, float x, float y) {
         indicator.setIndicatorX(x);
         indicator.setIndicatorY(y);
-        updateNum(indicator, x);
     }
 
-    private void updateNum(DoubleSelectIndicator indicator, float x) {
-        if (x > endLineX - unlimitedArea) {
-            indicator.setNum(maxValue + "+");
-        } else {
-            x += 0.5f;
-            int currentNum = (int) ((x - startLineX) * (maxValue - minValue) / (endLineX - startLineX - unlimitedArea));
-            indicator.setNum(currentNum);
-        }
-    }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -299,16 +291,26 @@ public class DoubleSelectSeekBar extends View {
                 mPaint);
     }
 
+    // 增加触碰的响应范围
+    private float touchPadding = 0;
+
     private boolean checkIsTouchIndicator(DoubleSelectIndicator indicator, float x, float y) {
         float[] range = indicator.getIndicatorRange();
-        return x >= range[LEFT] && x <= range[RIGHT] && y >= range[TOP] && y <= range[BOTTOM];
+        return x >= range[LEFT] - touchPadding && x <= range[RIGHT] + touchPadding && y >= range[TOP] - touchPadding && y <= range[BOTTOM] + touchPadding;
+    }
+
+    public float getTouchPadding() {
+        return touchPadding;
+    }
+
+    public void setTouchPadding(float touchPadding) {
+        this.touchPadding = touchPadding;
     }
 
     private boolean isMinIndicatorTouched;
     private boolean isMaxIndicatorTouched;
     private float lastX;
     private float currentX;
-    private int currentValue;
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -357,13 +359,11 @@ public class DoubleSelectSeekBar extends View {
 
     private void maxIndicatorMoveToPosition(float x) {
         maxIndicator.setIndicatorX(Math.max(minIndicator.indicatorX, Math.min(x, endLineX)));
-        updateNum(maxIndicator, maxIndicator.getIndicatorX());
         invalidate();
     }
 
     private void minIndicatorMoveToPosition(float x) {
         minIndicator.setIndicatorX(Math.max(startLineX, Math.min(x, maxIndicator.indicatorX)));
-        updateNum(minIndicator, minIndicator.getIndicatorX());
         invalidate();
     }
 
@@ -375,17 +375,23 @@ public class DoubleSelectSeekBar extends View {
         //当设置的值超过最大值则直接将其设置为最大值的平方，确保定位到endLineX
         value1 = value1 > maxValue ? maxValue * maxValue : value1;
         value2 = value2 > maxValue ? maxValue * maxValue : value2;
-        float x1 = value1 / valueStep * (endLineX - startLineX - unlimitedArea) + startLineX;
-        float x2 = value2 / valueStep * (endLineX - startLineX - unlimitedArea) + startLineX;
+        float x1 = calculatePositionByNum(value1);
+        float x2 = calculatePositionByNum(value2);
         x1 = Math.max(startLineX, Math.min(x1, endLineX));
         x2 = Math.max(startLineX, Math.min(x2, endLineX));
         float minX = value1 < value2 ? x1 : x2;
         float maxX = value1 < value2 ? x2 : x1;
         minIndicator.setIndicatorX(minX);
         maxIndicator.setIndicatorX(maxX);
-        updateNum(minIndicator, minX);
-        updateNum(maxIndicator, maxX);
         invalidate();
+    }
+
+    public float calculatePositionByNum(float value) {
+        return value / valueStep * (endLineX - startLineX - unlimitedArea) + startLineX;
+    }
+
+    public float calculateNumByPosition(float positionX) {
+        return (positionX - startLineX) * (maxValue - minValue) / (endLineX - startLineX - unlimitedArea);
     }
 
     public float getMinValue() {
@@ -419,6 +425,14 @@ public class DoubleSelectSeekBar extends View {
 
     public int getNumDegree() {
         return numDegree;
+    }
+
+    public int getNumStep() {
+        return numStep;
+    }
+
+    public void setNumStep(int numStep) {
+        this.numStep = numStep;
     }
 
     @Override
@@ -468,6 +482,7 @@ public class DoubleSelectSeekBar extends View {
             this.indicatorX = indicatorX;
             indicatorRange[0] = indicatorX - indicatorRadius;
             indicatorRange[2] = indicatorX + indicatorRadius;
+            updateNum(this.indicatorX);
         }
 
         public float getIndicatorY() {
@@ -488,12 +503,24 @@ public class DoubleSelectSeekBar extends View {
             if (num % numDegree == 0) {
                 this.num = String.valueOf(num);
             } else {
+                // 例如numDegree精度为50，numStep为25，则每当数值大于25则记为50，大于75则记为100
+                num += numStep;
                 this.num = String.valueOf(num / numDegree * numDegree);
             }
         }
 
         public void setNum(String num) {
             this.num = num;
+        }
+
+        private void updateNum(float x) {
+            if (x > endLineX - unlimitedArea) {
+                setNum(maxValue + "+");
+            } else {
+                x += 0.5f;
+                int currentNum = (int) calculateNumByPosition(x);
+                setNum(currentNum);
+            }
         }
     }
 

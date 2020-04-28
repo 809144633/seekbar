@@ -17,6 +17,7 @@ public class MainActivity extends AppCompatActivity {
         seekBar.setMinValue(0);
         seekBar.setMaxValue(400);
         seekBar.setDegree(50);
+        seekBar.setNumStep(25);
         findViewById(R.id.btn).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
